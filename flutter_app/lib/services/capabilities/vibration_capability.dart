@@ -1,9 +1,9 @@
-import 'package:flutter/services.dart';
+﻿import 'package:flutter/services.dart';
 import '../../models/node_frame.dart';
 import 'capability_handler.dart';
 
 class VibrationCapability extends CapabilityHandler {
-  static const _channel = MethodChannel('com.nxg.openclawproot/native');
+  static const _channel = MethodChannel('com.junwan666.openclawzh/native');
 
   @override
   String get name => 'haptic';
@@ -61,3 +61,4 @@ class VibrationCapability extends CapabilityHandler {
     }
   }
 }
+

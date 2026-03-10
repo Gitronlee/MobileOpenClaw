@@ -1,4 +1,4 @@
-package com.nxg.openclawproot
+﻿package com.junwan666.openclawzh
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -32,8 +32,8 @@ import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
-    private val CHANNEL = "com.nxg.openclawproot/native"
-    private val EVENT_CHANNEL = "com.nxg.openclawproot/gateway_logs"
+    private val CHANNEL = "com.junwan666.openclawzh/native"
+    private val EVENT_CHANNEL = "com.junwan666.openclawzh/gateway_logs"
 
     private lateinit var bootstrapManager: BootstrapManager
     private lateinit var processManager: ProcessManager
@@ -658,3 +658,4 @@ class MainActivity : FlutterActivity() {
         const val STORAGE_PERMISSION_REQUEST = 1003
     }
 }
+

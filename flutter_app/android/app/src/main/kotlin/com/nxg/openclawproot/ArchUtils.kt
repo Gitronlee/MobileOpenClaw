@@ -1,4 +1,4 @@
-package com.nxg.openclawproot
+﻿package com.junwan666.openclawzh
 
 import android.os.Build
 
@@ -24,3 +24,4 @@ object ArchUtils {
         }
     }
 }
+

@@ -1,4 +1,4 @@
-package com.nxg.openclawproot
+﻿package com.junwan666.openclawzh
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -136,3 +136,4 @@ class SetupService : Service() {
         } catch (_: Exception) {}
     }
 }
+

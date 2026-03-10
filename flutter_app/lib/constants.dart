@@ -1,7 +1,7 @@
-class AppConstants {
+﻿class AppConstants {
   static const String appName = 'OpenClaw';
   static const String version = '1.8.5';
-  static const String packageName = 'com.nxg.openclawproot';
+  static const String packageName = 'com.junwan666.openclawzh';
 
   /// Matches ANSI escape sequences (e.g. color codes in terminal output).
   static final ansiEscape = RegExp(r'\x1b\[[0-9;]*[a-zA-Z]');
@@ -31,7 +31,7 @@ class AppConstants {
   static const String rootfsArmhf = '${ubuntuRootfsUrl}armhf.tar.gz';
   static const String rootfsAmd64 = '${ubuntuRootfsUrl}amd64.tar.gz';
 
-  // Node.js binary tarball — downloaded directly by Flutter, extracted by Java.
+  // Node.js binary tarball 鈥?downloaded directly by Flutter, extracted by Java.
   // Bypasses curl/gpg/NodeSource which fail inside proot.
   static const String nodeVersion = '22.13.1';
   static const String nodeBaseUrl =
@@ -60,8 +60,8 @@ class AppConstants {
   static const String nodeRole = 'node';
   static const int pairingTimeoutMs = 300000;
 
-  static const String channelName = 'com.nxg.openclawproot/native';
-  static const String eventChannelName = 'com.nxg.openclawproot/gateway_logs';
+  static const String channelName = 'com.junwan666.openclawzh/native';
+  static const String eventChannelName = 'com.junwan666.openclawzh/gateway_logs';
 
   static String getRootfsUrl(String arch) {
     switch (arch) {
@@ -76,3 +76,4 @@ class AppConstants {
     }
   }
 }
+

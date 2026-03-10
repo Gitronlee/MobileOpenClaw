@@ -1,4 +1,4 @@
-package com.nxg.openclawproot
+﻿package com.junwan666.openclawzh
 
 import android.content.Context
 import android.net.ConnectivityManager
@@ -90,7 +90,7 @@ class BootstrapManager(
         // Two-phase approach:
         //   Phase 1: Extract directories, regular files, and hard links (as copies).
         //   Phase 2: Create all symlinks (deferred so directory structure exists first).
-        // This handles tarball entry ordering issues (e.g., bin/bash before bin→usr/bin).
+        // This handles tarball entry ordering issues (e.g., bin/bash before bin鈫抲sr/bin).
         val deferredSymlinks = mutableListOf<Pair<String, String>>() // target, path
         var entryCount = 0
         var fileCount = 0
@@ -128,7 +128,7 @@ class BootstrapManager(
                                         symlinkCount++
                                     }
                                     entry.isLink -> {
-                                        // Hard link → copy the target file
+                                        // Hard link 鈫?copy the target file
                                         val target = entry.linkName
                                             .removePrefix("./")
                                             .removePrefix("/")
@@ -396,7 +396,7 @@ class BootstrapManager(
      * Called automatically after extraction.
      */
     private fun configureRootfs() {
-        // 1. Disable apt sandboxing — proot fakes UID 0 via ptrace but cannot
+        // 1. Disable apt sandboxing 鈥?proot fakes UID 0 via ptrace but cannot
         //    intercept setresuid/setresgid, so apt's _apt user privilege drop
         //    fails with "Operation not permitted". Tell apt to stay as root.
         val aptConfDir = File("$rootfsDir/etc/apt/apt.conf.d")
@@ -760,7 +760,7 @@ class BootstrapManager(
                     binEntries[it.groupValues[1]] = it.groupValues[2]
                 }
             } else {
-                // String: "path" — use package name as bin name
+                // String: "path" 鈥?use package name as bin name
                 val path = value.trim('"')
                 binEntries[packageName] = path
             }
@@ -790,7 +790,7 @@ class BootstrapManager(
     }
 
     private fun deleteRecursively(file: File) {
-        // CRITICAL: Do NOT follow symlinks — the rootfs contains symlinks
+        // CRITICAL: Do NOT follow symlinks 鈥?the rootfs contains symlinks
         // to /storage/emulated/0 (sdcard). Following them would delete the
         // user's photos, downloads, and other real files.
 
@@ -821,7 +821,7 @@ class BootstrapManager(
         val bypassDir = File("$rootfsDir/root/.openclaw")
         bypassDir.mkdirs()
 
-        // 1. CWD fix — proot's getcwd() syscall returns ENOSYS on Android 10+.
+        // 1. CWD fix 鈥?proot's getcwd() syscall returns ENOSYS on Android 10+.
         //    process.cwd() is called by Node's CJS module resolver and npm.
         //    This MUST be loaded before any other module.
         val cwdFixContent = """
@@ -836,7 +836,7 @@ process.cwd = function() {
 """.trimIndent()
         File(bypassDir, "cwd-fix.js").writeText(cwdFixContent)
 
-        // 2. Node wrapper — patches broken syscalls then runs the target script.
+        // 2. Node wrapper 鈥?patches broken syscalls then runs the target script.
         //    Used during bootstrap (where NODE_OPTIONS must be unset).
         //    Usage: node /root/.openclaw/node-wrapper.js <script> [args...]
         val wrapperContent = """
@@ -859,7 +859,7 @@ if (script) {
 """.trimIndent()
         File(bypassDir, "node-wrapper.js").writeText(wrapperContent)
 
-        // 3. Shared proot compatibility patches — used by both node-wrapper.js
+        // 3. Shared proot compatibility patches 鈥?used by both node-wrapper.js
         //    (bootstrap) and bionic-bypass.js (runtime).
         //    Patches: process.cwd, fs.mkdir, child_process.spawn, os.*, fs.rename,
         //    fs.watch, fs.chmod/chown.
@@ -871,7 +871,7 @@ if (script) {
 'use strict';
 
 // ====================================================================
-// 1. process.cwd() — getcwd() returns ENOSYS in proot
+// 1. process.cwd() 鈥?getcwd() returns ENOSYS in proot
 // ====================================================================
 const _origCwd = process.cwd;
 process.cwd = function() {
@@ -880,18 +880,18 @@ process.cwd = function() {
 };
 
 // ====================================================================
-// 2. os module patches — various /proc reads fail in proot
+// 2. os module patches 鈥?various /proc reads fail in proot
 // ====================================================================
 const _os = require('os');
 
-// os.hostname() — may fail reading /proc/sys/kernel/hostname
+// os.hostname() 鈥?may fail reading /proc/sys/kernel/hostname
 const _origHostname = _os.hostname;
 _os.hostname = function() {
   try { return _origHostname.call(_os); }
   catch(e) { return 'localhost'; }
 };
 
-// os.tmpdir() — ensure it returns /tmp
+// os.tmpdir() 鈥?ensure it returns /tmp
 const _origTmpdir = _os.tmpdir;
 _os.tmpdir = function() {
   try {
@@ -900,14 +900,14 @@ _os.tmpdir = function() {
   } catch(e) { return '/tmp'; }
 };
 
-// os.homedir() — may fail with ENOSYS
+// os.homedir() 鈥?may fail with ENOSYS
 const _origHomedir = _os.homedir;
 _os.homedir = function() {
   try { return _origHomedir.call(_os); }
   catch(e) { return process.env.HOME || '/root'; }
 };
 
-// os.userInfo() — getpwuid may fail in proot
+// os.userInfo() 鈥?getpwuid may fail in proot
 const _origUserInfo = _os.userInfo;
 _os.userInfo = function(opts) {
   try { return _origUserInfo.call(_os, opts); }
@@ -921,7 +921,7 @@ _os.userInfo = function(opts) {
   }
 };
 
-// os.cpus() — reading /proc/cpuinfo may fail
+// os.cpus() 鈥?reading /proc/cpuinfo may fail
 const _origCpus = _os.cpus;
 _os.cpus = function() {
   try {
@@ -931,7 +931,7 @@ _os.cpus = function() {
   return [{ model: 'ARM', speed: 2000, times: { user: 0, nice: 0, sys: 0, idle: 0, irq: 0 } }];
 };
 
-// os.totalmem() / os.freemem() — reading /proc/meminfo may fail
+// os.totalmem() / os.freemem() 鈥?reading /proc/meminfo may fail
 const _origTotalmem = _os.totalmem;
 _os.totalmem = function() {
   try { return _origTotalmem.call(_os); }
@@ -943,7 +943,7 @@ _os.freemem = function() {
   catch(e) { return 2 * 1024 * 1024 * 1024; } // 2GB fallback
 };
 
-// os.networkInterfaces() — Android blocks getifaddrs()
+// os.networkInterfaces() 鈥?Android blocks getifaddrs()
 const _origNetIf = _os.networkInterfaces;
 _os.networkInterfaces = function() {
   try {
@@ -959,7 +959,7 @@ _os.networkInterfaces = function() {
 };
 
 // ====================================================================
-// 3. fs.mkdir — mkdirat() returns ENOSYS in proot
+// 3. fs.mkdir 鈥?mkdirat() returns ENOSYS in proot
 // ====================================================================
 const _fs = require('fs');
 const _path = require('path');
@@ -1002,7 +1002,7 @@ if (_fsp) {
 }
 
 // ====================================================================
-// 4. fs.rename — renameat2() may ENOSYS in proot; fallback to copy+unlink
+// 4. fs.rename 鈥?renameat2() may ENOSYS in proot; fallback to copy+unlink
 // ====================================================================
 const _origRenameSync = _fs.renameSync;
 _fs.renameSync = function(oldPath, newPath) {
@@ -1044,7 +1044,7 @@ if (_fsp) {
 }
 
 // ====================================================================
-// 5. fs.chmod/chown — fchmodat/fchownat may fail; tolerate ENOSYS
+// 5. fs.chmod/chown 鈥?fchmodat/fchownat may fail; tolerate ENOSYS
 // ====================================================================
 for (const fn of ['chmod', 'chown', 'lchown']) {
   const origSync = _fs[fn + 'Sync'];
@@ -1066,7 +1066,7 @@ for (const fn of ['chmod', 'chown', 'lchown']) {
 }
 
 // ====================================================================
-// 6. fs.watch — inotify may fail; provide silent no-op fallback
+// 6. fs.watch 鈥?inotify may fail; provide silent no-op fallback
 // ====================================================================
 const _origWatch = _fs.watch;
 _fs.watch = function(filename, options, listener) {
@@ -1086,11 +1086,11 @@ _fs.watch = function(filename, options, listener) {
 };
 
 // ====================================================================
-// 7. child_process.spawn — handle ENOSYS (proot) and ENOENT (missing binary).
+// 7. child_process.spawn 鈥?handle ENOSYS (proot) and ENOENT (missing binary).
 //    Command-aware mock:
 //    - Side-effect cmds (git, node-gyp, cmake, make): return FAILURE (128)
 //      so npm doesn't look for files they were supposed to create
-//    - Everything else: return SUCCESS (0) — npm internals proceed
+//    - Everything else: return SUCCESS (0) 鈥?npm internals proceed
 //    Handles both ENOSYS (proot syscall fail) and ENOENT (binary not found,
 //    e.g. git not installed in rootfs).
 // ====================================================================
@@ -1098,7 +1098,7 @@ const _cp = require('child_process');
 const _EventEmitter = require('events');
 
 // Commands that produce side effects (files). Must return failure.
-// Note: node-gyp, make, cmake are NOT mocked — python3/make/g++ are
+// Note: node-gyp, make, cmake are NOT mocked 鈥?python3/make/g++ are
 // installed in the rootfs so native addon compilation works properly.
 function _isSideEffectCmd(cmd) {
   const base = String(cmd).split('/').pop();
@@ -1200,7 +1200,7 @@ _cp.execFileSync = function(file, args, options) {
 """.trimIndent()
         File(bypassDir, "proot-compat.js").writeText(prootCompatContent)
 
-        // 4. Bionic bypass — comprehensive runtime patcher for openclaw.
+        // 4. Bionic bypass 鈥?comprehensive runtime patcher for openclaw.
         //    Loaded via NODE_OPTIONS="--require /root/.openclaw/bionic-bypass.js"
         val bypassContent = """
 // OpenClaw Bionic Bypass - Auto-generated
@@ -1213,7 +1213,7 @@ require('/root/.openclaw/proot-compat.js');
 
         File(bypassDir, "bionic-bypass.js").writeText(bypassContent)
 
-        // 5. Git config — write .gitconfig directly to rootfs to avoid shell
+        // 5. Git config 鈥?write .gitconfig directly to rootfs to avoid shell
         //    quoting issues when running `git config` inside proot via bash -c.
         //    Rewrites SSH URLs to HTTPS (no SSH keys in proot).
         //    npm dependencies like @whiskeysockets/libsignal-node use git+ssh.
@@ -1309,7 +1309,7 @@ require('/root/.openclaw/proot-compat.js');
         // /proc/loadavg
         File(procDir, "loadavg").writeText("0.12 0.07 0.02 2/165 765\n")
 
-        // /proc/stat — matching proot-distro (8 CPUs)
+        // /proc/stat 鈥?matching proot-distro (8 CPUs)
         File(procDir, "stat").writeText(
             "cpu  1957 0 2877 93280 262 342 254 87 0 0\n" +
             "cpu0 31 0 226 12027 82 10 4 9 0 0\n" +
@@ -1332,14 +1332,14 @@ require('/root/.openclaw/proot-compat.js');
         // /proc/uptime
         File(procDir, "uptime").writeText("124.08 932.80\n")
 
-        // /proc/version — fake kernel info matching proot-distro v4.37.0
+        // /proc/version 鈥?fake kernel info matching proot-distro v4.37.0
         File(procDir, "version").writeText(
             "Linux version ${ProcessManager.FAKE_KERNEL_RELEASE} (proot@termux) " +
             "(gcc (GCC) 13.3.0, GNU ld (GNU Binutils) 2.42) " +
             "${ProcessManager.FAKE_KERNEL_VERSION}\n"
         )
 
-        // /proc/vmstat — matching proot-distro format
+        // /proc/vmstat 鈥?matching proot-distro format
         File(procDir, "vmstat").writeText(
             "nr_free_pages 1743136\n" +
             "nr_zone_inactive_anon 179281\n" +
@@ -1373,7 +1373,7 @@ require('/root/.openclaw/proot-compat.js');
         // /proc/sys/fs/inotify/max_user_watches
         File(procDir, "max_user_watches").writeText("4096\n")
 
-        // /proc/sys/crypto/fips_enabled — libgcrypt reads this on startup;
+        // /proc/sys/crypto/fips_enabled 鈥?libgcrypt reads this on startup;
         // missing/unreadable on Android causes apt HTTP method to SIGABRT
         File(procDir, "fips_enabled").writeText("0\n")
 
@@ -1401,3 +1401,4 @@ require('/root/.openclaw/proot-compat.js');
         }
     }
 }
+

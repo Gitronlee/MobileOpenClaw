@@ -1,4 +1,4 @@
-package com.nxg.openclawproot
+﻿package com.junwan666.openclawzh
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -30,15 +30,15 @@ class GatewayService : Service() {
         private val mainHandler = Handler(Looper.getMainLooper())
 
         /** Check if the gateway process is actually alive (not just the flag).
-         *  Safe to call from the main thread — no blocking I/O. */
+         *  Safe to call from the main thread 鈥?no blocking I/O. */
         fun isProcessAlive(): Boolean {
             val inst = instance ?: return false
             if (!isRunning) return false
             val proc = inst.gatewayProcess
             // If we have a process reference, check if it's actually alive
             if (proc != null) return proc.isAlive
-            // No process ref yet — still in setup phase.
-            // If the gateway thread is alive, setup is ongoing — report true.
+            // No process ref yet 鈥?still in setup phase.
+            // If the gateway thread is alive, setup is ongoing 鈥?report true.
             // This covers slow devices where dir setup takes a long time.
             val thread = inst.gatewayThread
             if (thread != null && thread.isAlive) return true
@@ -146,7 +146,7 @@ class GatewayService : Service() {
 
                 // Recreate all directories (config, tmp, home, lib, proc/sys fakes)
                 // in case Android cleared them after an app update (#40).
-                // This must run before proot — it needs bind-mount targets.
+                // This must run before proot 鈥?it needs bind-mount targets.
                 val bootstrapManager = BootstrapManager(applicationContext, filesDir, nativeLibDir)
                 try {
                     bootstrapManager.setupDirectories()
@@ -184,7 +184,7 @@ class GatewayService : Service() {
                 // Abort if stop was requested during setup
                 if (stopping) return@Thread
 
-                // Final check right before launch — another instance may have
+                // Final check right before launch 鈥?another instance may have
                 // started between the first check and now
                 if (isPortInUse()) {
                     emitLog("Gateway already running on port 18789, skipping launch")
@@ -218,7 +218,7 @@ class GatewayService : Service() {
                     } catch (_: Exception) {}
                 }.start()
 
-                // Read stderr — log all lines on first attempt for debugging visibility
+                // Read stderr 鈥?log all lines on first attempt for debugging visibility
                 val stderrReader = BufferedReader(InputStreamReader(proc.errorStream))
                 val currentRestartCount = restartCount
                 Thread {
@@ -242,7 +242,7 @@ class GatewayService : Service() {
                 // If stop was requested, don't auto-restart
                 if (stopping) return@Thread
 
-                // If the gateway ran for >60s, it was a transient crash — reset counter
+                // If the gateway ran for >60s, it was a transient crash 鈥?reset counter
                 if (uptimeMs > 60_000) {
                     restartCount = 0
                 }
@@ -298,12 +298,12 @@ class GatewayService : Service() {
         watchdogThread?.interrupt()
         watchdogThread = Thread {
             try {
-                // Wait 45s before first check — give the process time to start
+                // Wait 45s before first check 鈥?give the process time to start
                 Thread.sleep(45_000)
                 while (!Thread.interrupted() && isRunning && !stopping) {
                     val proc = gatewayProcess
                     if (proc != null && !proc.isAlive) {
-                        // Process died — the waitFor() thread should handle restart,
+                        // Process died 鈥?the waitFor() thread should handle restart,
                         // but update the flag in case it's stuck
                         emitLog("[WARN] Watchdog: gateway process not alive")
                         break
@@ -349,7 +349,7 @@ class GatewayService : Service() {
     }
 
     /** Emit a log message to the Flutter EventChannel.
-     *  MUST post to main thread — EventSink.success() is not thread-safe. */
+     *  MUST post to main thread 鈥?EventSink.success() is not thread-safe. */
     private fun emitLog(message: String) {
         try {
             val ts = java.time.Instant.now().toString()
@@ -430,3 +430,4 @@ class GatewayService : Service() {
         } catch (_: Exception) {}
     }
 }
+

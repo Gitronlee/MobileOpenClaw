@@ -1,11 +1,11 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../models/node_frame.dart';
 import 'capability_handler.dart';
 
 class SensorCapability extends CapabilityHandler {
-  static const _channel = MethodChannel('com.nxg.openclawproot/native');
+  static const _channel = MethodChannel('com.junwan666.openclawzh/native');
 
   @override
   String get name => 'sensor';
@@ -74,3 +74,4 @@ class SensorCapability extends CapabilityHandler {
     }
   }
 }
+
