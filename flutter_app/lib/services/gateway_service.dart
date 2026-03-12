@@ -37,6 +37,10 @@ class GatewayService {
     _stateController.add(_state);
   }
 
+  void clearLogs() {
+    _updateState(_state.copyWith(logs: const []));
+  }
+
   /// Check if the gateway is already running (e.g. after app restart)
   /// and sync the UI state accordingly.  If not running but auto-start
   /// is enabled, start it automatically.

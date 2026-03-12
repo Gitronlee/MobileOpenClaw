@@ -113,10 +113,15 @@ const Map<String, String> appStringsEn = {
   'logsAutoScrollOn': 'Auto-scroll on',
   'logsAutoScrollOff': 'Auto-scroll off',
   'logsCopyAll': 'Copy all logs',
+  'logsClear': 'Clear logs',
   'logsFilterHint': 'Filter logs...',
   'logsEmpty': 'No logs yet. Start the gateway.',
   'logsNoMatch': 'No matching logs.',
   'logsCopied': 'Logs copied to clipboard',
+  'logsClearConfirmTitle': 'Clear all logs?',
+  'logsClearConfirmBody':
+      'This only clears the in-app log view. It does not stop the gateway or delete the log file on disk.',
+  'logsCleared': 'Logs cleared',
   'packagesTitle': 'Optional Packages',
   'packagesDescription':
       'Development tools you can install inside the Ubuntu environment.',

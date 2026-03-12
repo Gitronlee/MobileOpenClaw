@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:dio/dio.dart';
 import '../constants.dart';
 import '../models/setup_state.dart';
@@ -17,6 +18,108 @@ class BootstrapService {
     try {
       NativeBridge.stopSetupService();
     } catch (_) {}
+  }
+
+
+  double _clampProgress(double progress) =>
+      progress.clamp(0.0, 1.0).toDouble();
+
+  double _overallProgressFor(SetupStep step, double stepProgress) {
+    final progress = _clampProgress(stepProgress);
+    switch (step) {
+      case SetupStep.checkingStatus:
+        return progress * 0.05;
+      case SetupStep.downloadingRootfs:
+        return 0.05 + (progress * 0.25);
+      case SetupStep.extractingRootfs:
+        return 0.30 + (progress * 0.15);
+      case SetupStep.installingNode:
+        return 0.45 + (progress * 0.35);
+      case SetupStep.installingOpenClaw:
+        return 0.80 + (progress * 0.18);
+      case SetupStep.configuringBypass:
+        return 0.98 + (progress * 0.02);
+      case SetupStep.complete:
+        return 1.0;
+      case SetupStep.error:
+        return 0.0;
+    }
+  }
+
+  String _formatPercent(double progress, {int digits = 1}) =>
+      '${(_clampProgress(progress) * 100).toStringAsFixed(digits)}%';
+
+  void _emitProgress({
+    required void Function(SetupState) onProgress,
+    required SetupStep step,
+    required double progress,
+    required String message,
+    String? notificationText,
+  }) {
+    final clampedProgress = _clampProgress(progress);
+    onProgress(SetupState(
+      step: step,
+      progress: clampedProgress,
+      message: message,
+    ));
+    final overallProgress = _overallProgressFor(step, clampedProgress);
+    _updateSetupNotification(
+      notificationText ?? '$message ${_formatPercent(overallProgress)}',
+      progress: (overallProgress * 100).round(),
+    );
+  }
+
+  Future<T> _runEstimatedProgress<T>({
+    required void Function(SetupState) onProgress,
+    required SetupStep step,
+    required double startProgress,
+    required double targetProgress,
+    required String message,
+    required Future<T> Function() task,
+    required Duration estimatedDuration,
+    Duration tick = const Duration(milliseconds: 800),
+  }) async {
+    _emitProgress(
+      onProgress: onProgress,
+      step: step,
+      progress: startProgress,
+      message: message,
+    );
+
+    final future = task();
+    var isDone = false;
+    future.whenComplete(() => isDone = true);
+    final stopwatch = Stopwatch()..start();
+    final durationMs = estimatedDuration.inMilliseconds <= 0
+        ? 1.0
+        : estimatedDuration.inMilliseconds.toDouble();
+    var lastProgress = -1.0;
+
+    while (!isDone) {
+      await Future.delayed(tick);
+      if (isDone) break;
+
+      final elapsedFactor = stopwatch.elapsedMilliseconds / durationMs;
+      final easedRatio =
+          (1 - math.exp(-2.2 * elapsedFactor)).clamp(0.0, 1.0).toDouble();
+      final currentProgress =
+          startProgress + ((targetProgress - startProgress) * easedRatio);
+
+      if ((currentProgress - lastProgress).abs() < 0.003) {
+        continue;
+      }
+      lastProgress = currentProgress;
+      final overallProgress = _overallProgressFor(step, currentProgress);
+      _emitProgress(
+        onProgress: onProgress,
+        step: step,
+        progress: currentProgress,
+        message: message,
+        notificationText: '$message ${_formatPercent(overallProgress)}',
+      );
+    }
+
+    return await future;
   }
 
   Future<SetupState> checkStatus() async {
@@ -52,12 +155,13 @@ class BootstrapService {
       } catch (_) {} // Non-fatal if service fails to start
 
       // Step 0: Setup directories
-      onProgress(const SetupState(
+      _emitProgress(
+        onProgress: onProgress,
         step: SetupStep.checkingStatus,
-        progress: 0.0,
+        progress: 0.4,
         message: 'Setting up directories...',
-      ));
-      _updateSetupNotification('Setting up directories...', progress: 2);
+        notificationText: 'Setting up directories... 2.0%',
+      );
       try { await NativeBridge.setupDirs(); } catch (_) {}
       try { await NativeBridge.writeResolv(); } catch (_) {}
 
@@ -84,12 +188,13 @@ class BootstrapService {
       } catch (_) {}
       final tarPath = '$filesDir/tmp/ubuntu-rootfs.tar.gz';
 
-      _updateSetupNotification('Downloading Ubuntu rootfs...', progress: 5);
-      onProgress(const SetupState(
+      _emitProgress(
+        onProgress: onProgress,
         step: SetupStep.downloadingRootfs,
         progress: 0.0,
         message: 'Downloading Ubuntu rootfs...',
-      ));
+        notificationText: 'Downloading Ubuntu rootfs... 5.0%',
+      );
 
       await _dio.download(
         rootfsUrl,
@@ -99,31 +204,39 @@ class BootstrapService {
             final progress = received / total;
             final mb = (received / 1024 / 1024).toStringAsFixed(1);
             final totalMb = (total / 1024 / 1024).toStringAsFixed(1);
-            // Map download to 5-30% of overall progress
-            final notifProgress = 5 + (progress * 25).round();
-            _updateSetupNotification('Downloading rootfs: $mb / $totalMb MB', progress: notifProgress);
-            onProgress(SetupState(
+            final overallProgress = _overallProgressFor(
+              SetupStep.downloadingRootfs,
+              progress,
+            );
+            _emitProgress(
+              onProgress: onProgress,
               step: SetupStep.downloadingRootfs,
               progress: progress,
               message: 'Downloading: $mb MB / $totalMb MB',
-            ));
+              notificationText:
+                  'Downloading rootfs: $mb / $totalMb MB (${_formatPercent(overallProgress)})',
+            );
           }
         },
       );
 
       // Step 2: Extract rootfs (30-45%)
-      _updateSetupNotification('Extracting rootfs...', progress: 30);
-      onProgress(const SetupState(
+      await _runEstimatedProgress(
+        onProgress: onProgress,
         step: SetupStep.extractingRootfs,
-        progress: 0.0,
+        startProgress: 0.02,
+        targetProgress: 0.92,
         message: 'Extracting rootfs (this takes a while)...',
-      ));
-      await NativeBridge.extractRootfs(tarPath);
-      onProgress(const SetupState(
+        estimatedDuration: const Duration(minutes: 2),
+        task: () => NativeBridge.extractRootfs(tarPath),
+      );
+      _emitProgress(
+        onProgress: onProgress,
         step: SetupStep.extractingRootfs,
         progress: 1.0,
         message: 'Rootfs extracted',
-      ));
+        notificationText: 'Rootfs extracted 45.0%',
+      );
 
       // Install bionic bypass + cwd-fix + node-wrapper BEFORE using node.
       // The wrapper patches process.cwd() which returns ENOSYS in proot.
@@ -131,12 +244,13 @@ class BootstrapService {
 
       // Step 3: Install Node.js (45-80%)
       // Fix permissions inside proot (Java extraction may miss execute bits)
-      _updateSetupNotification('Fixing rootfs permissions...', progress: 45);
-      onProgress(const SetupState(
+      _emitProgress(
+        onProgress: onProgress,
         step: SetupStep.installingNode,
-        progress: 0.0,
+        progress: 0.02,
         message: 'Fixing rootfs permissions...',
-      ));
+        notificationText: 'Fixing rootfs permissions... 45.7%',
+      );
       // Blanket recursive chmod on all bin/lib directories.
       // Java tar extraction loses execute bits; dpkg needs tar, xz,
       // gzip, rm, mv, etc. — easier to fix everything than enumerate.
@@ -149,25 +263,35 @@ class BootstrapService {
         'mkdir -p /var/lib/dpkg/updates /var/lib/dpkg/triggers; '
         'echo permissions_fixed',
       );
+      _emitProgress(
+        onProgress: onProgress,
+        step: SetupStep.installingNode,
+        progress: 0.08,
+        message: 'Fixing rootfs permissions...',
+        notificationText: 'Fixing rootfs permissions... 47.8%',
+      );
 
       // --- Install base packages via apt-get (like Termux proot-distro) ---
       // Now that our proot matches Termux exactly (env -i, clean host env,
       // proper flags), dpkg works normally. No need for Java-side deb
       // extraction — let dpkg+tar handle it inside proot like Termux does.
-      _updateSetupNotification('Updating package lists...', progress: 48);
-      onProgress(const SetupState(
+      await _runEstimatedProgress(
+        onProgress: onProgress,
         step: SetupStep.installingNode,
-        progress: 0.1,
+        startProgress: 0.10,
+        targetProgress: 0.18,
         message: 'Updating package lists...',
-      ));
-      await NativeBridge.runInProot('apt-get update -y');
+        estimatedDuration: const Duration(seconds: 25),
+        task: () => NativeBridge.runInProot('apt-get update -y'),
+      );
 
-      _updateSetupNotification('Installing base packages...', progress: 52);
-      onProgress(const SetupState(
+      _emitProgress(
+        onProgress: onProgress,
         step: SetupStep.installingNode,
-        progress: 0.15,
+        progress: 0.20,
         message: 'Installing base packages...',
-      ));
+        notificationText: 'Installing base packages... 52.0%',
+      );
       // ca-certificates: HTTPS for npm/git
       // git: openclaw has git deps (@whiskeysockets/libsignal-node)
       // python3, make, g++: node-gyp needs these to compile native addons
@@ -182,9 +306,17 @@ class BootstrapService {
         'ln -sf /usr/share/zoneinfo/Etc/UTC /etc/localtime && '
         'echo "Etc/UTC" > /etc/timezone',
       );
-      await NativeBridge.runInProot(
-        'apt-get install -y --no-install-recommends '
-        'ca-certificates git python3 make g++ curl wget',
+      await _runEstimatedProgress(
+        onProgress: onProgress,
+        step: SetupStep.installingNode,
+        startProgress: 0.22,
+        targetProgress: 0.42,
+        message: 'Installing base packages...',
+        estimatedDuration: const Duration(minutes: 3),
+        task: () => NativeBridge.runInProot(
+          'apt-get install -y --no-install-recommends '
+          'ca-certificates git python3 make g++ curl wget',
+        ),
       );
 
       // Git config (.gitconfig) is written by installBionicBypass() on the
@@ -197,46 +329,55 @@ class BootstrapService {
       final nodeTarUrl = AppConstants.getNodeTarballUrl(arch);
       final nodeTarPath = '$filesDir/tmp/nodejs.tar.xz';
 
-      onProgress(const SetupState(
+      _emitProgress(
+        onProgress: onProgress,
         step: SetupStep.installingNode,
-        progress: 0.3,
+        progress: 0.45,
         message: 'Downloading Node.js ${AppConstants.nodeVersion}...',
-      ));
-      _updateSetupNotification('Downloading Node.js...', progress: 55);
+        notificationText: 'Downloading Node.js... 60.8%',
+      );
       await _dio.download(
         nodeTarUrl,
         nodeTarPath,
         onReceiveProgress: (received, total) {
           if (total > 0) {
-            final progress = 0.3 + (received / total) * 0.4;
+            final downloadRatio = received / total;
+            final progress = 0.45 + (downloadRatio * 0.35);
             final mb = (received / 1024 / 1024).toStringAsFixed(1);
             final totalMb = (total / 1024 / 1024).toStringAsFixed(1);
-            // Map Node download to 55-70% of overall
-            final notifProgress = 55 + ((received / total) * 15).round();
-            _updateSetupNotification('Downloading Node.js: $mb / $totalMb MB', progress: notifProgress);
-            onProgress(SetupState(
+            final overallProgress = _overallProgressFor(
+              SetupStep.installingNode,
+              progress,
+            );
+            _emitProgress(
+              onProgress: onProgress,
               step: SetupStep.installingNode,
               progress: progress,
               message: 'Downloading Node.js: $mb MB / $totalMb MB',
-            ));
+              notificationText:
+                  'Downloading Node.js: $mb / $totalMb MB (${_formatPercent(overallProgress)})',
+            );
           }
         },
       );
 
-      _updateSetupNotification('Extracting Node.js...', progress: 72);
-      onProgress(const SetupState(
+      await _runEstimatedProgress(
+        onProgress: onProgress,
         step: SetupStep.installingNode,
-        progress: 0.75,
+        startProgress: 0.82,
+        targetProgress: 0.92,
         message: 'Extracting Node.js...',
-      ));
-      await NativeBridge.extractNodeTarball(nodeTarPath);
+        estimatedDuration: const Duration(seconds: 25),
+        task: () => NativeBridge.extractNodeTarball(nodeTarPath),
+      );
 
-      _updateSetupNotification('Verifying Node.js...', progress: 78);
-      onProgress(const SetupState(
+      _emitProgress(
+        onProgress: onProgress,
         step: SetupStep.installingNode,
-        progress: 0.9,
+        progress: 0.96,
         message: 'Verifying Node.js...',
-      ));
+        notificationText: 'Verifying Node.js... 78.6%',
+      );
       // node-wrapper.js patches broken proot syscalls before loading npm.
       // /usr/local/bin is on PATH, so node finds the tarball's npm.
       const wrapper = '/root/.openclaw/node-wrapper.js';
@@ -246,64 +387,74 @@ class BootstrapService {
       await NativeBridge.runInProot(
         'node --version && $nodeRun $npmCli --version',
       );
-      onProgress(const SetupState(
+      _emitProgress(
+        onProgress: onProgress,
         step: SetupStep.installingNode,
         progress: 1.0,
         message: 'Node.js installed',
-      ));
-
-      // Step 4: Install OpenClaw (80-98%)
-      _updateSetupNotification('Installing OpenClaw...', progress: 82);
-      onProgress(const SetupState(
-        step: SetupStep.installingOpenClaw,
-        progress: 0.0,
-        message: 'Installing OpenClaw (this may take a few minutes)...',
-      ));
-      // Install openclaw — fork/exec works now with our Termux-matching proot.
-      await NativeBridge.runInProot(
-        '$nodeRun $npmCli install -g openclaw',
-        timeout: 1800,
+        notificationText: 'Node.js installed 80.0%',
       );
 
-      _updateSetupNotification('Creating bin wrappers...', progress: 92);
-      onProgress(const SetupState(
+      // Step 4: Install OpenClaw (80-98%)
+      await _runEstimatedProgress(
+        onProgress: onProgress,
         step: SetupStep.installingOpenClaw,
-        progress: 0.7,
+        startProgress: 0.02,
+        targetProgress: 0.72,
+        message: 'Installing OpenClaw (this may take a few minutes)...',
+        estimatedDuration: const Duration(minutes: 4),
+        task: () => NativeBridge.runInProot(
+          '$nodeRun $npmCli install -g openclaw',
+          timeout: 1800,
+        ),
+      );
+
+      _emitProgress(
+        onProgress: onProgress,
+        step: SetupStep.installingOpenClaw,
+        progress: 0.78,
         message: 'Creating bin wrappers...',
-      ));
+        notificationText: 'Creating bin wrappers... 94.0%',
+      );
       // npm global install creates symlinks for bin entries, but symlinks
       // can fail silently in proot. Create shell wrappers from Java side
       // (reads package.json directly from rootfs filesystem — no escaping).
       await NativeBridge.createBinWrappers('openclaw');
 
-      _updateSetupNotification('Verifying OpenClaw...', progress: 96);
-      onProgress(const SetupState(
+      _emitProgress(
+        onProgress: onProgress,
         step: SetupStep.installingOpenClaw,
-        progress: 0.9,
+        progress: 0.92,
         message: 'Verifying OpenClaw...',
-      ));
+        notificationText: 'Verifying OpenClaw... 96.6%',
+      );
       await NativeBridge.runInProot('openclaw --version || echo openclaw_installed');
-      onProgress(const SetupState(
+      _emitProgress(
+        onProgress: onProgress,
         step: SetupStep.installingOpenClaw,
         progress: 1.0,
         message: 'OpenClaw installed',
-      ));
+        notificationText: 'OpenClaw installed 98.0%',
+      );
 
       // Step 5: Bionic Bypass already installed (before node verification)
-      _updateSetupNotification('Setup complete!', progress: 100);
-      onProgress(const SetupState(
+      _emitProgress(
+        onProgress: onProgress,
         step: SetupStep.configuringBypass,
         progress: 1.0,
         message: 'Bionic Bypass configured',
-      ));
+        notificationText: 'Setup complete! 100.0%',
+      );
 
       // Done
       _stopSetupService();
-      onProgress(const SetupState(
+      _emitProgress(
+        onProgress: onProgress,
         step: SetupStep.complete,
         progress: 1.0,
         message: 'Setup complete! Ready to start the gateway.',
-      ));
+        notificationText: 'Setup complete! 100.0%',
+      );
     } on DioException catch (e) {
       _stopSetupService();
       onProgress(SetupState(

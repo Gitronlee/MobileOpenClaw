@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math';
+import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../constants.dart';
 import '../models/node_frame.dart';
@@ -14,7 +15,6 @@ class NodeWsService {
   bool _shouldReconnect = false;
   int _reconnectAttempt = 0;
   Timer? _reconnectTimer;
-  Timer? _pingTimer;
   String? _url;
   DateTime? _lastActivity;
 
@@ -39,13 +39,14 @@ class NodeWsService {
     if (_url == null) return;
 
     try {
-      _channel = WebSocketChannel.connect(Uri.parse(_url!));
+      _channel = IOWebSocketChannel.connect(
+        Uri.parse(_url!),
+        pingInterval: const Duration(seconds: 30),
+      );
       await _channel!.ready;
       _connected = true;
       _reconnectAttempt = 0;
       _lastActivity = DateTime.now();
-
-      _startPing();
 
       _subscription = _channel!.stream.listen(
         (data) {
@@ -71,22 +72,8 @@ class NodeWsService {
     }
   }
 
-  void _startPing() {
-    _pingTimer?.cancel();
-    _pingTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (_connected && _channel != null) {
-        try {
-          _channel!.sink.add('ping');
-        } catch (_) {
-          _handleDisconnect();
-        }
-      }
-    });
-  }
-
   void _handleDisconnect() {
     _connected = false;
-    _pingTimer?.cancel();
     _subscription?.cancel();
     _channel = null;
 
@@ -145,7 +132,6 @@ class NodeWsService {
   Future<void> disconnect() async {
     _shouldReconnect = false;
     _reconnectTimer?.cancel();
-    _pingTimer?.cancel();
     _subscription?.cancel();
     _connected = false;
     await _channel?.sink.close();

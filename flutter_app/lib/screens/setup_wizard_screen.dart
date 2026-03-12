@@ -87,7 +87,7 @@ class _SetupWizardScreenState extends State<SetupWizardScreen> {
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 24),
                   Expanded(
                     child: _buildSteps(state, theme, isDark, l10n),
                   ),

@@ -2,6 +2,7 @@
 
 import android.os.Build
 import android.os.Environment
+import android.system.Os
 import java.io.BufferedReader
 import java.io.File
 import java.io.InputStreamReader
@@ -85,6 +86,46 @@ class ProcessManager(
         } catch (_: Exception) {}
     }
 
+    /**
+     * Only bind stdio device paths when the host fd resolves to a real file/tty
+     * path. In Android foreground services these often resolve to pipe:[...],
+     * which PRoot cannot sanitize as a bind source and emits warnings for.
+     */
+    private fun buildStandardFdBinds(): List<String> {
+        val binds = mutableListOf<String>()
+        val mappings = listOf(
+            Triple(0, "/dev/stdin", true),
+            Triple(1, "/dev/stdout", false),
+            Triple(2, "/dev/stderr", false),
+        )
+
+        for ((fd, guestPath, allowDevNull) in mappings) {
+            val hostPath = "/proc/self/fd/$fd"
+            if (isBindableFd(hostPath, allowDevNull)) {
+                binds.add("--bind=$hostPath:$guestPath")
+            }
+        }
+
+        return binds
+    }
+
+    private fun isBindableFd(hostPath: String, allowDevNull: Boolean): Boolean {
+        return try {
+            val target = Os.readlink(hostPath)
+            when {
+                target.isBlank() -> false
+                target.startsWith("pipe:[") -> false
+                target.startsWith("socket:[") -> false
+                target.startsWith("anon_inode:") -> false
+                allowDevNull && target == "/dev/null" -> true
+                target.startsWith("/") -> File(target).exists()
+                else -> false
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     private fun commonProotFlags(): List<String> {
         // Guarantee resolv.conf exists before building the bind-mount list
         ensureResolvConf()
@@ -105,9 +146,6 @@ class ProcessManager(
             "--bind=/dev/urandom:/dev/random",
             "--bind=/proc",
             "--bind=/proc/self/fd:/dev/fd",
-            "--bind=/proc/self/fd/0:/dev/stdin",
-            "--bind=/proc/self/fd/1:/dev/stdout",
-            "--bind=/proc/self/fd/2:/dev/stderr",
             "--bind=/sys",
             // Fake /proc entries 鈥?Android restricts most /proc access.
             // proot-distro's run_proot_cmd() binds these unconditionally.
@@ -131,6 +169,9 @@ class ProcessManager(
             // Bind-mount shared storage into proot (Termux proot-distro style).
             // Bind the whole /storage tree so symlinks and sub-mounts resolve.
             // Then create /sdcard symlink inside rootfs pointing to the right path.
+            val stdioFlags = buildStandardFdBinds()
+            val baseFlags = flags + stdioFlags
+
             val hasAccess = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 Environment.isExternalStorageManager()
             } else {
@@ -153,12 +194,12 @@ class ProcessManager(
                         sdcardLink.mkdirs()
                     }
                 }
-                flags + listOf(
+                baseFlags + listOf(
                     "--bind=/storage:/storage",
                     "--bind=/storage/emulated/0:/sdcard"
                 )
             } else {
-                flags
+                baseFlags
             }
         }
     }

@@ -1,5 +1,16 @@
 ﻿# Changelog
 
+## v1.8.6 — 安装进度、日志工具与发布脚本
+
+### 关键改动
+
+- **安装进度反馈**：优化安装向导的进度显示。RootFS 解压、基础包安装、Node.js 处理和 OpenClaw 安装等长耗时阶段现在会显示更平滑的步骤百分比，减少长时间看起来“卡住不动”的情况；临时加入的总进度卡片也已移除，仅保留每个步骤自己的百分比显示。
+- **网关日志工具**：日志查看页新增“清空日志”按钮，并带确认弹窗；该操作只会清空应用内的日志列表，不会删除磁盘上的日志文件。
+- **节点 WebSocket 心跳修复**：节点 WebSocket 心跳从发送文本 `ping` 改为使用底层 ping 帧，避免网关出现 `Unexpected token 'p', "ping" is not valid JSON` 这类 JSON 解析错误。
+- **PRoot 启动警告收敛**：现在只有在宿主端标准输入输出句柄确实可绑定时，才会绑定 `/proc/self/fd/0/1/2`，从而减少部分 Android 前台服务场景下网关启动时的 `can't sanitize binding "/proc/self/fd/*"` warning。
+- **发布打包流程**：新增 `scripts/build_release.py` 发布构建脚本，可交互输入发布版本和构建号，默认将构建号设为当前 `pubspec` 的下一个值，并可自动准备 PRoot 二进制、整理 APK/AAB 到 `release/v版本/` 目录；README 也已补充对应说明。
+
+
 ## v1.8.5 — i18n Integration / 汉化整合
 
 ### Key Changes / 关键改动

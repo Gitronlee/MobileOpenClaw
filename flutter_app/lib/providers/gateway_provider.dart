@@ -31,6 +31,10 @@ class GatewayProvider extends ChangeNotifier {
     return _gatewayService.checkHealth();
   }
 
+  void clearLogs() {
+    _gatewayService.clearLogs();
+  }
+
   @override
   void dispose() {
     _subscription?.cancel();

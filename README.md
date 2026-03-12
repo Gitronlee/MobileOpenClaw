@@ -65,6 +65,12 @@ flutter build apk --release
 
 说明：如果你需要可运行的 proot 相关 `.so`，请按仓库脚本准备 `jniLibs` 后再打包。
 
+推荐：也可直接使用仓库内的 Python 发布脚本，它会交互输入版本号/构建号，并自动将 APK/AAB 整理到 `release/v版本/` 目录：
+
+```bash
+python scripts/build_release.py
+```
+
 ---
 
 ## 目录说明

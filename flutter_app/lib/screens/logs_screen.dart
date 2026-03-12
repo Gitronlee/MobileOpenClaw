@@ -31,6 +31,7 @@ class _LogsScreenState extends State<LogsScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = context.l10n;
+    final hasLogs = context.select<GatewayProvider, bool>((provider) => provider.state.logs.isNotEmpty);
 
     return Scaffold(
       appBar: AppBar(
@@ -56,6 +57,11 @@ class _LogsScreenState extends State<LogsScreen> {
             icon: const Icon(Icons.copy),
             tooltip: l10n.t('logsCopyAll'),
             onPressed: () => _copyLogs(context),
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_sweep_outlined),
+            tooltip: l10n.t('logsClear'),
+            onPressed: hasLogs ? () => _clearLogs(context) : null,
           ),
         ],
       ),
@@ -179,6 +185,34 @@ class _LogsScreenState extends State<LogsScreen> {
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(context.l10n.t('logsCopied'))),
+    );
+  }
+
+  Future<void> _clearLogs(BuildContext context) async {
+    final l10n = context.l10n;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.t('logsClearConfirmTitle')),
+        content: Text(l10n.t('logsClearConfirmBody')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.t('commonCancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(l10n.t('logsClear')),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !context.mounted) return;
+
+    context.read<GatewayProvider>().clearLogs();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(l10n.t('logsCleared'))),
     );
   }
 }
