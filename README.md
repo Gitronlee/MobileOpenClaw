@@ -1,14 +1,15 @@
-﻿# OpenClaw 中文整合版（openclaw-termux-zh）
+﻿# MobileOpenClaw （基于 openclaw-termux-zh）
 
 [简体中文](README.md) | [English](docs/README_en.md)
 
-> 本仓库为汉化整合版本，主要用于中文用户维护与分发。
+> 本仓库为自用优化版本，主要用于大陆用户实现手机部署openclaw，claudecode等。
 >
 > 整合来源：
 > - 上游项目：[`mithun50/openclaw-termux`](https://github.com/mithun50/openclaw-termux)
 > - 汉化分支作者：[`TIANLI0/openclaw-termux` 的 `feature/translation` 分支](https://github.com/TIANLI0/openclaw-termux/tree/feature/translation)
->
-> 本仓库在上游基础上整合了 i18n（简中/繁中/日文）相关改动，并以中文文档为主。
+> 基于上游，本仓库改动：
+- 源换为清华源、阿里源等大陆用户方便下载的源，部署过程更迅速，终端用户操作也更便捷。
+- 
 
 ---
 
