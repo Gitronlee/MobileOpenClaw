@@ -1,13 +1,12 @@
+import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:xterm/xterm.dart';
-import 'package:flutter_pty/flutter_pty.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/native_bridge.dart';
 import '../services/screenshot_service.dart';
-import '../services/terminal_service.dart';
+import '../services/terminal_session_service.dart';
 import '../widgets/terminal_toolbar.dart';
 
 class TerminalScreen extends StatefulWidget {
@@ -20,7 +19,9 @@ class TerminalScreen extends StatefulWidget {
 class _TerminalScreenState extends State<TerminalScreen> {
   late final Terminal _terminal;
   late final TerminalController _controller;
-  Pty? _pty;
+  final _sessionService = TerminalSessionService();
+  StreamSubscription? _outputSubscription;
+  StreamSubscription? _exitSubscription;
   bool _loading = true;
   String? _error;
   final _ctrlNotifier = ValueNotifier<bool>(false);
@@ -47,102 +48,49 @@ class _TerminalScreenState extends State<TerminalScreen> {
     super.initState();
     _terminal = Terminal(maxLines: 10000);
     _controller = TerminalController();
-    NativeBridge.startTerminalService();
-    // Defer PTY start until after the first frame so TerminalView has been
-    // laid out and _terminal.viewWidth/viewHeight reflect real screen
-    // dimensions instead of the 80×24 default.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _startPty();
-    });
+    _startSession();
   }
 
-  Future<void> _startPty() async {
-    _pty?.kill();
-    _pty = null;
-    try {
-      // Ensure dirs + resolv.conf exist before proot starts (#40).
-      try { await NativeBridge.setupDirs(); } catch (_) {}
-      try { await NativeBridge.writeResolv(); } catch (_) {}
-      try {
-        final filesDir = await NativeBridge.getFilesDir();
-        const resolvContent = 'nameserver 8.8.8.8\nnameserver 8.8.4.4\n';
-        final resolvFile = File('$filesDir/config/resolv.conf');
-        if (!resolvFile.existsSync()) {
-          Directory('$filesDir/config').createSync(recursive: true);
-          resolvFile.writeAsStringSync(resolvContent);
-        }
-        // Also write into rootfs /etc/ so DNS works even if bind-mount fails
-        final rootfsResolv = File('$filesDir/rootfs/ubuntu/etc/resolv.conf');
-        if (!rootfsResolv.existsSync()) {
-          rootfsResolv.parent.createSync(recursive: true);
-          rootfsResolv.writeAsStringSync(resolvContent);
-        }
-      } catch (_) {}
-      final config = await TerminalService.getProotShellConfig();
-      final args = TerminalService.buildProotArgs(
-        config,
-        columns: _terminal.viewWidth,
-        rows: _terminal.viewHeight,
-      );
+  Future<void> _startSession() async {
+    // Initialize and start the session
+    await _sessionService.init();
+    await _sessionService.start();
 
-      _pty = Pty.start(
-        config['executable']!,
-        arguments: args,
-        environment: TerminalService.buildHostEnv(config),
-        columns: _terminal.viewWidth,
-        rows: _terminal.viewHeight,
-      );
-
-      _pty!.output.cast<List<int>>().listen((data) {
-        final text = utf8.decode(data, allowMalformed: true);
+    // Subscribe to output stream
+    _outputSubscription = _sessionService.outputStream.listen((text) {
+      if (mounted) {
         _terminal.write(text);
-      });
+      }
+    });
 
-      _pty!.exitCode.then((code) {
-        _terminal.write('\r\n[Process exited with code $code]\r\n');
-      });
+    // Subscribe to exit events
+    _exitSubscription = _sessionService.exitCodeStream.listen((code) {
+      if (mounted) {
+        _terminal.write('\r\n[Process exited with code ${code ?? 0}]\r\n');
+      }
+    });
 
-      _terminal.onOutput = (data) {
-        // Intercept keyboard input when CTRL/ALT toolbar modifiers are active
-        if (_ctrlNotifier.value && data.length == 1) {
-          final code = data.toLowerCase().codeUnitAt(0);
-          if (code >= 97 && code <= 122) {
-            // Ctrl+a-z → bytes 1-26
-            _pty?.write(Uint8List.fromList([code - 96]));
-            _ctrlNotifier.value = false;
-            return;
-          }
-        }
-        if (_altNotifier.value && data.isNotEmpty) {
-          // Alt+key → ESC + key
-          _pty?.write(utf8.encode('\x1b$data'));
-          _altNotifier.value = false;
-          return;
-        }
-        _pty?.write(utf8.encode(data));
-      };
-
-      _terminal.onResize = (w, h, pw, ph) {
-        _pty?.resize(h, w);
-      };
-
-      setState(() => _loading = false);
-    } catch (e) {
+    if (mounted) {
       setState(() {
         _loading = false;
-        _error = 'Failed to start terminal: $e';
+        if (_sessionService.lastError != null) {
+          _error = _sessionService.lastError;
+        }
       });
     }
   }
 
   @override
-  void dispose() {
-    _ctrlNotifier.dispose();
-    _altNotifier.dispose();
-    _controller.dispose();
-    _pty?.kill();
-    NativeBridge.stopTerminalService();
-    super.dispose();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Update terminal size when screen size changes
+    if (!_loading && _error == null) {
+      final columns = _terminal.viewWidth;
+      final rows = _terminal.viewHeight;
+      if (columns > 0 && rows > 0) {
+        _sessionService.resize(columns, rows);
+      }
+    }
   }
 
   String? _getSelectedText() {
@@ -241,7 +189,7 @@ class _TerminalScreenState extends State<TerminalScreen> {
   Future<void> _paste() async {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
     if (data?.text != null && data!.text!.isNotEmpty) {
-      _pty?.write(utf8.encode(data.text!));
+      _sessionService.write(data.text!);
     }
   }
 
@@ -330,6 +278,31 @@ class _TerminalScreenState extends State<TerminalScreen> {
     }
   }
 
+  void _restartSession() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    _outputSubscription?.cancel();
+    _exitSubscription?.cancel();
+
+    await _sessionService.clear();
+    await _startSession();
+  }
+
+  @override
+  void dispose() {
+    _outputSubscription?.cancel();
+    _exitSubscription?.cancel();
+    _ctrlNotifier.dispose();
+    _altNotifier.dispose();
+    _controller.dispose();
+    // Note: We do NOT kill the PTY here to preserve the session
+    // when the user navigates away from this screen
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -359,14 +332,7 @@ class _TerminalScreenState extends State<TerminalScreen> {
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Restart',
-            onPressed: () {
-              _pty?.kill();
-              setState(() {
-                _loading = true;
-                _error = null;
-              });
-              _startPty();
-            },
+            onPressed: _restartSession,
           ),
         ],
       ),
@@ -408,13 +374,7 @@ class _TerminalScreenState extends State<TerminalScreen> {
               ),
               const SizedBox(height: 16),
               FilledButton.icon(
-                onPressed: () {
-                  setState(() {
-                    _loading = true;
-                    _error = null;
-                  });
-                  _startPty();
-                },
+                onPressed: _restartSession,
                 icon: const Icon(Icons.refresh),
                 label: const Text('Retry'),
               ),
@@ -439,11 +399,13 @@ class _TerminalScreenState extends State<TerminalScreen> {
                 fontFamilyFallback: _fontFallback,
               ),
               onTapUp: _handleTap,
+              onOutput: _handleTerminalOutput,
+              onResize: _handleResize,
             ),
           ),
         ),
         TerminalToolbar(
-          pty: _pty,
+          sessionService: _sessionService,
           ctrlNotifier: _ctrlNotifier,
           altNotifier: _altNotifier,
         ),
@@ -451,4 +413,27 @@ class _TerminalScreenState extends State<TerminalScreen> {
     );
   }
 
+  void _handleTerminalOutput(String data) {
+    // Intercept keyboard input when CTRL/ALT toolbar modifiers are active
+    if (_ctrlNotifier.value && data.length == 1) {
+      final code = data.toLowerCase().codeUnitAt(0);
+      if (code >= 97 && code <= 122) {
+        // Ctrl+a-z → bytes 1-26
+        _sessionService.writeBytes(Uint8List.fromList([code - 96]));
+        _ctrlNotifier.value = false;
+        return;
+      }
+    }
+    if (_altNotifier.value && data.isNotEmpty) {
+      // Alt+key → ESC + key
+      _sessionService.writeBytes(utf8.encode('\x1b$data'));
+      _altNotifier.value = false;
+      return;
+    }
+    _sessionService.write(data);
+  }
+
+  void _handleResize(int width, int height) {
+    _sessionService.resize(width, height);
+  }
 }

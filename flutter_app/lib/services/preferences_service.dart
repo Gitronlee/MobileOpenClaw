@@ -13,6 +13,7 @@ class PreferencesService {
   static const _keyNodePublicKey = 'node_ed25519_public';
   static const _keyNodeGatewayToken = 'node_gateway_token';
   static const _keyLastAppVersion = 'last_app_version';
+  static const _keyTerminalSessionPid = 'terminal_session_pid';
 
   late SharedPreferences _prefs;
 
@@ -98,6 +99,20 @@ class PreferencesService {
       _prefs.setInt(_keyNodeGatewayPort, value);
     } else {
       _prefs.remove(_keyNodeGatewayPort);
+    }
+  }
+
+  /// PID of the terminal PTY session (for session persistence)
+  int? get terminalSessionPid {
+    final val = _prefs.getInt(_keyTerminalSessionPid);
+    return val;
+  }
+
+  set terminalSessionPid(int? value) {
+    if (value != null) {
+      _prefs.setInt(_keyTerminalSessionPid, value);
+    } else {
+      _prefs.remove(_keyTerminalSessionPid);
     }
   }
 }
