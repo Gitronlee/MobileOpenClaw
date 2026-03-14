@@ -45,6 +45,7 @@ class _TerminalScreenState extends State<TerminalScreen> {
   @override
   void initState() {
     super.initState();
+    _keepAlive = true;
     _terminal = Terminal(maxLines: 10000);
     _controller = TerminalController();
     NativeBridge.startTerminalService();
@@ -135,13 +136,48 @@ class _TerminalScreenState extends State<TerminalScreen> {
     }
   }
 
+  bool _keepAlive = true;
+
+  void _exitTerminal() {
+    _keepAlive = false;
+    _pty?.kill();
+    _pty = null;
+    NativeBridge.stopTerminalService();
+    Navigator.of(context).pop();
+  }
+
+  Future<void> _showExitDialog() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Exit Terminal'),
+        content: const Text('Close the terminal session?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Exit'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      _exitTerminal();
+    }
+  }
+
   @override
   void dispose() {
     _ctrlNotifier.dispose();
     _altNotifier.dispose();
     _controller.dispose();
-    _pty?.kill();
-    NativeBridge.stopTerminalService();
+    if (!_keepAlive) {
+      _pty?.kill();
+      NativeBridge.stopTerminalService();
+    }
     super.dispose();
   }
 
@@ -368,6 +404,11 @@ class _TerminalScreenState extends State<TerminalScreen> {
               _startPty();
             },
           ),
+        IconButton(
+          icon: const Icon(Icons.exit_to_app),
+          tooltip: 'Exit',
+          onPressed: _showExitDialog,
+        ),
         ],
       ),
       body: _buildBody(),
