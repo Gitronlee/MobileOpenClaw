@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter_pty/flutter_pty.dart';
 import 'preferences_service.dart';
 import 'terminal_service.dart';
@@ -17,8 +18,10 @@ class TerminalSessionService {
   Pty? _pty;
   bool _isInitialized = false;
   int? _sessionPid;
-  final _outputController = StreamController<String>.broadcast();
-  final _exitCodeController = StreamController<int?>.broadcast();
+  StreamController<String> _outputController =
+      StreamController<String>.broadcast();
+  StreamController<int?> _exitCodeController =
+      StreamController<int?>.broadcast();
   String? _lastError;
 
   // Streams
@@ -49,7 +52,7 @@ class TerminalSessionService {
     if (savedPid != null) {
       // Check if process is still running
       try {
-        Process.killPid(savedPid, 0); // Signal 0 just checks if process exists
+        Process.killPid(savedPid, ProcessSignal.sigterm);
         _sessionPid = savedPid;
         _lastError = 'Restored existing session (PID: $savedPid)';
       } on ProcessException catch (_) {
@@ -120,14 +123,14 @@ class TerminalSessionService {
   /// Write data to the terminal
   void write(String data) {
     if (_pty != null) {
-      _pty!.write(utf8.encode(data));
+      _pty!.write(Uint8List.fromList(utf8.encode(data)));
     }
   }
 
   /// Write binary data to the terminal
   void writeBytes(List<int> data) {
     if (_pty != null) {
-      _pty!.write(data);
+      _pty!.write(Uint8List.fromList(data));
     }
   }
 
@@ -155,7 +158,7 @@ class TerminalSessionService {
   Future<bool> isSessionRunning() async {
     if (_sessionPid == null) return false;
     try {
-      Process.killPid(_sessionPid!, 0);
+      Process.killPid(_sessionPid!, ProcessSignal.sigterm);
       return true;
     } on ProcessException catch (_) {
       // Process no longer exists

@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_pty/flutter_pty.dart';
 import 'package:xterm/xterm.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/native_bridge.dart';
@@ -48,6 +50,8 @@ class _TerminalScreenState extends State<TerminalScreen> {
     super.initState();
     _terminal = Terminal(maxLines: 10000);
     _controller = TerminalController();
+    // Set up terminal output handler for keyboard input
+    _terminal.onOutput = _handleTerminalOutput;
     _startSession();
   }
 
@@ -399,13 +403,11 @@ class _TerminalScreenState extends State<TerminalScreen> {
                 fontFamilyFallback: _fontFallback,
               ),
               onTapUp: _handleTap,
-              onOutput: _handleTerminalOutput,
-              onResize: _handleResize,
             ),
           ),
         ),
         TerminalToolbar(
-          sessionService: _sessionService,
+          pty: null, // TerminalScreen uses sessionService instead of direct pty
           ctrlNotifier: _ctrlNotifier,
           altNotifier: _altNotifier,
         ),
@@ -426,7 +428,7 @@ class _TerminalScreenState extends State<TerminalScreen> {
     }
     if (_altNotifier.value && data.isNotEmpty) {
       // Alt+key → ESC + key
-      _sessionService.writeBytes(utf8.encode('\x1b$data'));
+      _sessionService.writeBytes(Uint8List.fromList(utf8.encode('\x1b$data')));
       _altNotifier.value = false;
       return;
     }
