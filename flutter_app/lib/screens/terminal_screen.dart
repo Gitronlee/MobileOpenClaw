@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -22,6 +23,7 @@ class _TerminalScreenState extends State<TerminalScreen> {
   late final TerminalController _controller;
   Pty? _pty;
   StreamSubscription? _ptySubscription;
+  bool _ptyRunning = false;
   bool _loading = true;
   String? _error;
   final _ctrlNotifier = ValueNotifier<bool>(false);
@@ -58,19 +60,14 @@ class _TerminalScreenState extends State<TerminalScreen> {
     });
   }
 
-  Future<void> _startPty() async {
-    // 如果 Pty 已存在且进程仍在运行，跳过重新创建（后台常驻场景）
-    if (_pty != null) {
-      try {
-        final exitCodeFuture = _pty!.exitCode;
-        if (!exitCodeFuture.isCompleted) {
-          // 进程仍在运行，只更新终端尺寸，跳过重建
-          _pty?.resize(_terminal.viewHeight, _terminal.viewWidth);
-          setState(() => _loading = false);
-          return;
-        }
-      } catch (_) {}
-    }
+ Future<void> _startPty() async {
+  // 如果 Pty 已存在且进程仍在运行，跳过重新创建（后台常驻场景）
+  if (_pty != null && _ptyRunning) {
+    // 进程仍在运行，只更新终端尺寸，跳过重建
+    _pty?.resize(_terminal.viewHeight, _terminal.viewWidth);
+    setState(() => _loading = false);
+    return;
+  }
 
     // 创建新的 Pty 会话
     _pty?.kill();
@@ -103,7 +100,8 @@ class _TerminalScreenState extends State<TerminalScreen> {
         rows: _terminal.viewHeight,
       );
 
-      _pty = Pty.start(
+  _ptyRunning = true;
+  _pty = Pty.start(
         config['executable']!,
         arguments: args,
         environment: TerminalService.buildHostEnv(config),
@@ -116,7 +114,8 @@ class _TerminalScreenState extends State<TerminalScreen> {
         _terminal.write(text);
       });
 
-      _pty!.exitCode.then((code) {
+	  _pty!.exitCode.then((code) {
+  _ptyRunning = false;
         _terminal.write('\r\n[Process exited with code $code]\r\n');
       });
 
