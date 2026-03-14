@@ -8,11 +8,11 @@
 
   static const String authorName = 'Mithun Gowda B';
   static const String authorEmail = 'mithungowda.b7411@gmail.com';
-  static const String githubUrl = 'https://github.com/mithun50/openclaw-termux';
+  static const String githubUrl = 'https://github.com/Gitronlee/MobileOpenClaw';
   static const String license = 'MIT';
 
   static const String githubApiLatestRelease =
-      'https://api.github.com/repos/mithun50/openclaw-termux/releases/latest';
+      'https://api.github.com/repos/Gitronlee/MobileOpenClaw/releases/latest';
 
   // NextGenX
   static const String orgName = 'NextGenX';
