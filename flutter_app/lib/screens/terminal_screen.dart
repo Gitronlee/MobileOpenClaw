@@ -21,6 +21,7 @@ class _TerminalScreenState extends State<TerminalScreen> {
   late final Terminal _terminal;
   late final TerminalController _controller;
   Pty? _pty;
+  StreamSubscription? _ptySubscription;
   bool _loading = true;
   String? _error;
   final _ctrlNotifier = ValueNotifier<bool>(false);
@@ -58,8 +59,24 @@ class _TerminalScreenState extends State<TerminalScreen> {
   }
 
   Future<void> _startPty() async {
+    // 如果 Pty 已存在且进程仍在运行，跳过重新创建（后台常驻场景）
+    if (_pty != null) {
+      try {
+        final exitCodeFuture = _pty!.exitCode;
+        if (!exitCodeFuture.isCompleted) {
+          // 进程仍在运行，只更新终端尺寸，跳过重建
+          _pty?.resize(_terminal.viewHeight, _terminal.viewWidth);
+          setState(() => _loading = false);
+          return;
+        }
+      } catch (_) {}
+    }
+
+    // 创建新的 Pty 会话
     _pty?.kill();
+    await _ptySubscription?.cancel();
     _pty = null;
+    _ptySubscription = null;
     try {
       // Ensure dirs + resolv.conf exist before proot starts (#40).
       try { await NativeBridge.setupDirs(); } catch (_) {}
@@ -94,7 +111,7 @@ class _TerminalScreenState extends State<TerminalScreen> {
         rows: _terminal.viewHeight,
       );
 
-      _pty!.output.cast<List<int>>().listen((data) {
+      _ptySubscription = _pty!.output.cast<List<int>>().listen((data) {
         final text = utf8.decode(data, allowMalformed: true);
         _terminal.write(text);
       });
@@ -174,6 +191,7 @@ class _TerminalScreenState extends State<TerminalScreen> {
     _ctrlNotifier.dispose();
     _altNotifier.dispose();
     _controller.dispose();
+    _ptySubscription?.cancel();
     if (!_keepAlive) {
       _pty?.kill();
       NativeBridge.stopTerminalService();
