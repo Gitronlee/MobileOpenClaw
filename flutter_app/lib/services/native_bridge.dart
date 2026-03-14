@@ -86,6 +86,22 @@ class NativeBridge {
     return await _channel.invokeMethod('isTerminalServiceRunning');
   }
 
+  static Future<bool> isPtyProcessAlive() async {
+    return await _channel.invokeMethod('isPtyProcessAlive');
+  }
+
+  static Future<int> getPtyPid() async {
+    return await _channel.invokeMethod('getPtyPid');
+  }
+
+  static Future<bool> savePtyPid(int pid) async {
+    return await _channel.invokeMethod('savePtyPid', {'pid': pid});
+  }
+
+  static Future<bool> clearPtyPid() async {
+    return await _channel.invokeMethod('clearPtyPid');
+  }
+
   static Future<bool> startNodeService() async {
     return await _channel.invokeMethod('startNodeService');
   }

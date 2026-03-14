@@ -54,20 +54,33 @@ class _TerminalScreenState extends State<TerminalScreen> {
     NativeBridge.startTerminalService();
     // Defer PTY start until after the first frame so TerminalView has been
     // laid out and _terminal.viewWidth/viewHeight reflect real screen
-    // dimensions instead of the 80×24 default.
+    // dimensions instead of the 80x24 default.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _startPty();
     });
   }
 
- Future<void> _startPty() async {
-  // 如果 Pty 已存在且进程仍在运行，跳过重新创建（后台常驻场景）
-  if (_pty != null && _ptyRunning) {
-    // 进程仍在运行，只更新终端尺寸，跳过重建
-    _pty?.resize(_terminal.viewHeight, _terminal.viewWidth);
-    setState(() => _loading = false);
-    return;
-  }
+  Future<void> _startPty() async {
+    // 检测 native 端是否有旧的 PTY 进程在运行
+    final oldPtyAlive = await NativeBridge.isPtyProcessAlive();
+
+    // 如果本地 Pty 对象存在且进程运行中，只更新终端尺寸
+    if (_pty != null && _ptyRunning) {
+      _pty?.resize(_terminal.viewHeight, _terminal.viewWidth);
+      setState(() => _loading = false);
+      return;
+    }
+
+    // 如果 native 端显示有旧进程存活，但本地 Pty 对象不存在
+    // 说明用户之前离开页面后进程还在运行，现在重新进入
+    // 这种情况无法恢复之前的 PTY 会话（flutter_pty 不支持附加到现有 PTY）
+    // 清理已死亡的进程记录
+    if (oldPtyAlive && (_pty == null || !_ptyRunning)) {
+      final savedPid = await NativeBridge.getPtyPid();
+      if (savedPid > 0) {
+        NativeBridge.clearPtyPid();
+      }
+    }
 
     // 创建新的 Pty 会话
     _pty?.kill();
@@ -100,8 +113,8 @@ class _TerminalScreenState extends State<TerminalScreen> {
         rows: _terminal.viewHeight,
       );
 
-  _ptyRunning = true;
-  _pty = Pty.start(
+      _ptyRunning = true;
+      _pty = Pty.start(
         config['executable']!,
         arguments: args,
         environment: TerminalService.buildHostEnv(config),
@@ -109,13 +122,19 @@ class _TerminalScreenState extends State<TerminalScreen> {
         rows: _terminal.viewHeight,
       );
 
+      // 保存 PTY PID 到 native 端，用于检测进程存活状态
+      if (_pty != null) {
+        NativeBridge.savePtyPid(_pty!.pid);
+      }
+
       _ptySubscription = _pty!.output.cast<List<int>>().listen((data) {
         final text = utf8.decode(data, allowMalformed: true);
         _terminal.write(text);
       });
 
-	  _pty!.exitCode.then((code) {
-  _ptyRunning = false;
+      _pty!.exitCode.then((code) {
+        _ptyRunning = false;
+        NativeBridge.clearPtyPid();
         _terminal.write('\r\n[Process exited with code $code]\r\n');
       });
 
@@ -124,14 +143,14 @@ class _TerminalScreenState extends State<TerminalScreen> {
         if (_ctrlNotifier.value && data.length == 1) {
           final code = data.toLowerCase().codeUnitAt(0);
           if (code >= 97 && code <= 122) {
-            // Ctrl+a-z → bytes 1-26
+            // Ctrl+a-z -> bytes 1-26
             _pty?.write(Uint8List.fromList([code - 96]));
             _ctrlNotifier.value = false;
             return;
           }
         }
         if (_altNotifier.value && data.isNotEmpty) {
-          // Alt+key → ESC + key
+          // Alt+key -> ESC + key
           _pty?.write(utf8.encode('\x1b$data'));
           _altNotifier.value = false;
           return;
@@ -158,6 +177,7 @@ class _TerminalScreenState extends State<TerminalScreen> {
     _keepAlive = false;
     _pty?.kill();
     _pty = null;
+    NativeBridge.clearPtyPid();
     NativeBridge.stopTerminalService();
     Navigator.of(context).pop();
   }
@@ -193,6 +213,7 @@ class _TerminalScreenState extends State<TerminalScreen> {
     _ptySubscription?.cancel();
     if (!_keepAlive) {
       _pty?.kill();
+      NativeBridge.clearPtyPid();
       NativeBridge.stopTerminalService();
     }
     super.dispose();
@@ -421,11 +442,11 @@ class _TerminalScreenState extends State<TerminalScreen> {
               _startPty();
             },
           ),
-        IconButton(
-          icon: const Icon(Icons.exit_to_app),
-          tooltip: 'Exit',
-          onPressed: _showExitDialog,
-        ),
+          IconButton(
+            icon: const Icon(Icons.exit_to_app),
+            tooltip: 'Exit',
+            onPressed: _showExitDialog,
+          ),
         ],
       ),
       body: _buildBody(),
@@ -508,5 +529,4 @@ class _TerminalScreenState extends State<TerminalScreen> {
       ],
     );
   }
-
 }
