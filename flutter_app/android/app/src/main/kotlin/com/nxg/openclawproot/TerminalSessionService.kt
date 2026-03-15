@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import android.system.Os
+import androidx.core.content.ContextCompat
 import java.io.BufferedReader
 import java.io.File
 import java.io.FileDescriptor
@@ -127,7 +128,8 @@ class TerminalSessionService : Service() {
    val prootPath = "$nativeLibDir/libproot.so"
 
    // Build proot command for interactive shell
-   val kernelRelease = "\\Linux\\localhost\\6.17.0-PRoot-Distro\\#1 SMP PREEMPT_DYNAMIC Fri, 10 Oct 2025 00:00:00 +0000\\$machine\\localdomain\\-1\\"
+   val machine = "aarch64" // Hardcode for arm64 devices (most common Android)
+        val kernelRelease = "\\Linux\\localhost\\6.17.0-PRoot-Distro\\#1 SMP PREEMPT_DYNAMIC Fri, 10 Oct 2025 00:00:00 +0000\\$machine\\localdomain\\-1\\"
 
    val cmd = mutableListOf(
     prootPath,
@@ -203,7 +205,7 @@ class TerminalSessionService : Service() {
    pb.redirectErrorStream(false)
 
    ptyProcess = pb.start()
-   val pid = ptyProcess!!.pid()
+   val pid = getProcessPid(ptyProcess!!)
    savePtyPid(this, pid)
 
    // Start reading output
@@ -259,7 +261,7 @@ class TerminalSessionService : Service() {
   ptyProcess?.let {
    try {
     // Try using stty command in the shell to resize
-    val pid = it.pid()
+    val pid = getProcessPid(it)
     Runtime.getRuntime().exec("kill -WINCH $pid")
    } catch (_: Exception) {}
   }
@@ -339,4 +341,14 @@ class TerminalSessionService : Service() {
     .build()
   }
  }
+
+    private fun getProcessPid(process: Process): Long {
+        return try {
+            val pidField = process::class.java.getDeclaredField("pid")
+            pidField.isAccessible = true
+            pidField.getLong(process)
+        } catch (_: Exception) {
+            -1L
+        }
+    }
 }
