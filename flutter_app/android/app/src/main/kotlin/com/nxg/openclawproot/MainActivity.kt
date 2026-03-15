@@ -34,12 +34,13 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
  private val CHANNEL = "com.junwan666.openclawzh/native"
  private val EVENT_CHANNEL = "com.junwan666.openclawzh/gateway_logs"
+ private val TERMINAL_EVENT_CHANNEL = "com.junwan666.openclawzh/terminal_output"
 
  private lateinit var bootstrapManager: BootstrapManager
  private lateinit var processManager: ProcessManager
  private var screenCaptureResult: MethodChannel.Result? = null
  private var screenCaptureDurationMs: Long = 5000L
- private var setupDone = false
+ private var setupDone = false\n  private var terminalEventSink: EventChannel.EventSink? = null
 
  override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
   super.configureFlutterEngine(flutterEngine)
