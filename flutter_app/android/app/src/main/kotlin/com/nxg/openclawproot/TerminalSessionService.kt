@@ -179,7 +179,7 @@ class TerminalSessionService : Service() {
    val hasStorage = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
     android.os.Environment.isExternalStorageManager()
    } else {
-    android.content.ContextCompat.checkSelfPermission(
+    ContextCompat.checkSelfPermission(
      this,
      android.Manifest.permission.READ_EXTERNAL_STORAGE
     ) == android.content.pm.PackageManager.PERMISSION_GRANTED
@@ -205,7 +205,7 @@ class TerminalSessionService : Service() {
    pb.redirectErrorStream(false)
 
    ptyProcess = pb.start()
-   val pid = getProcessPid(ptyProcess!!)
+   val pid = getProcessPid(ptyProcess!!).toInt()
    savePtyPid(this, pid)
 
    // Start reading output
@@ -224,6 +224,7 @@ class TerminalSessionService : Service() {
  private fun startOutputReader() {
   outputReaderThread = Thread {
    try {
+ Thread.currentThread().name = "PTYOutputReader"
     val reader = BufferedReader(InputStreamReader(ptyProcess!!.inputStream, "UTF-8"))
     var line: String?
     while (reader.readLine().also { line = it } != null) {
@@ -234,7 +235,8 @@ class TerminalSessionService : Service() {
    } catch (_: Exception) {
     // Process exited or error
    }
-  }.start()
+ }
+ outputReaderThread?.start()
 
   // Also read stderr
   Thread {

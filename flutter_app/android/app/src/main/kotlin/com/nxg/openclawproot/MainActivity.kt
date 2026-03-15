@@ -40,8 +40,8 @@ class MainActivity : FlutterActivity() {
  private lateinit var processManager: ProcessManager
  private var screenCaptureResult: MethodChannel.Result? = null
  private var screenCaptureDurationMs: Long = 5000L
- private var setupDone = false  private var terminalEventSink: EventChannel.EventSink? = null
-
+ private var setupDone = false
+ private var terminalEventSink: EventChannel.EventSink? = null
  override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
   super.configureFlutterEngine(flutterEngine)
 
